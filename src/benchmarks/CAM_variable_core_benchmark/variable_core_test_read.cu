@@ -8,11 +8,11 @@
 #include <thread>
 #include <cstdint>
 #include<ctime>
-#include "spdk_interface.h"
+#include "spdk_variable_core.h"
 #include <QDMAController.hpp>
 
 
-const int64_t embed_num = 100000;
+const int64_t embed_num = 1000000;
 //uintptr_t dev_addr[embed_num];
 //static GPUMemCtl* gpuMemCtl;
 static const int64_t lba_size = 512;
@@ -98,9 +98,9 @@ static void run_task_function_test() {
 
             //clear_wait_flag();
             //seq_write_submit(0, embed_num,(uintptr_t)gem_memory);
-            cam_gemm_write((u_int64_t *)embed_id, embed_num,(uintptr_t)gem_memory);
+            cam_gemm_read((u_int64_t *)embed_id, embed_num,(uintptr_t)gem_memory);
         
-            clear_wait_flag_write();
+            clear_wait_flag();
 
     }
     end_tsc = get_tscp();
@@ -124,8 +124,8 @@ static void run_task_function_test() {
 }
 
 int main(int argc, char** argv) {
-    
-    cam_init(4096);
+    int thread_num =2;
+    cam_init(4096,thread_num);
     run_task_function_test();    
     cam_clean_up();
 
@@ -133,5 +133,5 @@ int main(int argc, char** argv) {
 }
 
 /*
-nvcc -o test_random_write  -I /home/szy/yzh_hyprion/spdk_interface  -L /home/szy/yzh_hyprion/spdk_interface -lgpussd_baseline test_random_write.cu
+nvcc -o variable_core_test  -I /home/szy/application/spdk_variable_core  -L /home/szy/application/spdk_variable_core -lspdk_variable_core variable_core_test.cu
 */
