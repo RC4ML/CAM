@@ -1,3 +1,6 @@
 [submodule "spdk"]
 	path = spdk
 	url = https://github.com/RC4ML/spdk.git
+[submodule "gdrcopy"]
+	path = gdrcopy
+	url = https://github.com/RC4ML/gdrcopy.git
