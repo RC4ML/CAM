@@ -14,7 +14,7 @@ This is the source code for our paper.
 
 
 ## Install Dependencies and Build
-See [INSTALL.md](./doc/INSTALL.md) for install dependencies and build RPCNIC on a single machine.
+See [INSTALL.md](./doc/INSTALL.md) for install dependencies and build CAM on a single machine.
 
 
 ## Run Test
