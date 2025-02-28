@@ -6,14 +6,14 @@
 #include <string>
 #include <string_view>
 
-#include <fmt/core.h>
-#include <fmt/chrono.h>
-#include <fmt/ranges.h>
-#include <fmt/os.h>
-#include <fmt/args.h>
-#include <fmt/ostream.h>
-#include <fmt/std.h>	
-#include <fmt/color.h>
+// #include <fmt/core.h>
+// #include <fmt/chrono.h>
+// #include <fmt/ranges.h>
+// #include <fmt/os.h>
+// #include <fmt/args.h>
+// #include <fmt/ostream.h>
+// #include <fmt/std.h>	
+// #include <fmt/color.h>
 
 #include <unistd.h>
 #include <sys/mman.h>
@@ -57,25 +57,23 @@
 
 [[maybe_unused]] static bool debug_flag = false;
 
-static auto getSysPathBarName(uint8_t bus_id, uint8_t dev_id, uint8_t func_id, uint8_t bar_id) {
-	return fmt::format("/sys/bus/pci/devices/0000:{:02x}:{:02x}.{:x}/resource{}", bus_id, dev_id, func_id, bar_id);
-}
 
-[[maybe_unused]] static void errorPrint(std::string_view str) {
-	fmt::print(fg(fmt::color::red), "{}\n", str);
-}
 
-[[maybe_unused]] static void passPrint(std::string_view str) {
-	fmt::print(fg(fmt::color::green), "{}\n", str);
-}
+// [[maybe_unused]] static void errorPrint(std::string_view str) {
+// 	fmt::print(fg(fmt::color::red), "{}\n", str);
+// }
 
-[[maybe_unused]] static void warnPrint(std::string_view str) {
-	fmt::print(fg(fmt::color::yellow), "{}\n", str);
-}
+// [[maybe_unused]] static void passPrint(std::string_view str) {
+// 	fmt::print(fg(fmt::color::green), "{}\n", str);
+// }
 
-[[maybe_unused]] static void infoPrint(std::string_view str) {
-	fmt::print(fg(fmt::color::cyan), "{}\n", str);
-}
+// [[maybe_unused]] static void warnPrint(std::string_view str) {
+// 	fmt::print(fg(fmt::color::yellow), "{}\n", str);
+// }
+
+// [[maybe_unused]] static void infoPrint(std::string_view str) {
+// 	fmt::print(fg(fmt::color::cyan), "{}\n", str);
+// }
 
 static const size_t config_region_size = 256*1024;
 static const size_t lite_region_size = 4*1024;
@@ -108,7 +106,7 @@ void *MemCtl::alloc(size_t size) {
     auto &free_size = ck.second;
     /*如果找到的块为空则报告申请失败*/
     if (free_addr == 0) {
-        warnPrint(fmt::format("No Free CPU Chunk. Alloc failed!"));
+       // warnPrint(fmt::format("No Free CPU Chunk. Alloc failed!"));
         return nullptr;
     }
     /*如果内存块分配后仍存在剩余空间, 从内存块高地址部分分配*/
@@ -127,7 +125,7 @@ void MemCtl::free(void *ptr) {
     std::lock_guard<std::mutex> lock(allocMutex);
     /*检查释放的内存块的合法性*/
     if (!contains(used_chunk, (uint64_t) ptr)) {
-        errorPrint(fmt::format("Pointer to free is not in Alloc Log"));
+       // errorPrint(fmt::format("Pointer to free is not in Alloc Log"));
         exit(1);
     }
     auto it = used_chunk.find((uint64_t) ptr);
@@ -170,7 +168,7 @@ gdrMemAllocator::~gdrMemAllocator() {
         CUresult ret;
         ret = cuMemFree(it.second);
         if (ret != CUDA_SUCCESS) {
-            warnPrint(fmt::format("Fail to free cuMemAlloc GPU Memory"));
+           // warnPrint(fmt::format("Fail to free cuMemAlloc GPU Memory"));
         }
     }
 }
@@ -296,16 +294,16 @@ GPUMemCtl::~GPUMemCtl() {
 GPUMemCtl *GPUMemCtl::getInstance([[maybe_unused]]int32_t dev_id, [[maybe_unused]]size_t pool_size) {
 
     if (devID >= 0 && devID != dev_id) {
-        errorPrint(fmt::format("This QDMA library now only support one GPU Memory Pool"));
-        errorPrint(fmt::format("New device id {} is not equal to previous device id {}", dev_id, devID));
+        // errorPrint(fmt::format("This QDMA library now only support one GPU Memory Pool"));
+        // errorPrint(fmt::format("New device id {} is not equal to previous device id {}", dev_id, devID));
         exit(1);
     }
     // up round to 64KB
     pool_size = (pool_size + 64UL * 1024 - 1) & ~(64UL * 1024 - 1);
 
     if (pool_size % (2UL * 1024 * 1024) != 0) {
-        warnPrint(fmt::format("Suggest GPU Memory Pool Size to be multiple of 2MB for Page Aggregation"));
-        errorPrint(fmt::format("For correctness safety, the program will exit. Please change the pool size"));
+        // warnPrint(fmt::format("Suggest GPU Memory Pool Size to be multiple of 2MB for Page Aggregation"));
+        // errorPrint(fmt::format("For correctness safety, the program will exit. Please change the pool size"));
         exit(1);
     }
 
@@ -318,10 +316,10 @@ GPUMemCtl *GPUMemCtl::getInstance([[maybe_unused]]int32_t dev_id, [[maybe_unused
         static bool warn_flag = false;
         if (!warn_flag) {
             warn_flag = true;
-            warnPrint(fmt::format("This QDMA library now only support one GPU Memory Pool"));
-            warnPrint(fmt::format("Request pool size will be ignored"));
-            warnPrint(fmt::format("The previous GPU Memory Pool with size {} will be returned",
-                                  gpu_mem_ctl_list[0]->getPoolSize()));
+            // warnPrint(fmt::format("This QDMA library now only support one GPU Memory Pool"));
+            // warnPrint(fmt::format("Request pool size will be ignored"));
+            // warnPrint(fmt::format("The previous GPU Memory Pool with size {} will be returned",
+            //                       gpu_mem_ctl_list[0]->getPoolSize()));
         }
         return gpu_mem_ctl_list[0].get();
     }

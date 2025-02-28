@@ -12,7 +12,7 @@
 // #include "cuda_runtime.h"
 #include <cuda_runtime.h>
 #include <iostream>
-#include <QDMAController.hpp>
+#include <GPU_memory_management.hpp>
 
 #include <tuple>
 #include <vector>

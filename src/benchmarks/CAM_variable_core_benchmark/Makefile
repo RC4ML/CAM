@@ -10,7 +10,7 @@ $(shell mkdir -p $(OUTPUT_DIR))
 NVCC = nvcc
 
 # Compiler flags
-NVCC_FLAGS = -I $(INCLUDE_PATH) -I../../GPU_memory_lib -L $(LIB_PATH) -lCAM_variable_core
+NVCC_FLAGS = -I $(INCLUDE_PATH) -I../../GPU_memory_lib -L $(LIB_PATH)  -L../../../spdk/build/lib -lCAM_variable_core
 
 
 

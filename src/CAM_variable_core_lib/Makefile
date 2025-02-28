@@ -1,4 +1,4 @@
-SPDK_DIR = /home/ff/hyperion/spdk
+SPDK_DIR = ../../spdk
 OUTPUT_DIR = ../../build/lib
 
 
