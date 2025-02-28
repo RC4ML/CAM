@@ -28,11 +28,11 @@ If Check if the configuration is correct in Run Experiments of [EXP.md](./doc/EX
 ├── spdk (our modified SPDK driver)
 ├── gdrcopy (our modified gdrcopy driver)
 ├── build.sh (Script for compiling CAM code project)
-├── doc （Document on how to install and conduct experiments with CAM）
+├── doc (Document on how to install and conduct experiments with CAM)
 ├── README.md
 └── src
     ├── benchmarks
-    │   ├── CAM_benchmark （microbenchmark for CAM,one thread control one SSD）
+    │   ├── CAM_benchmark (microbenchmark for CAM,one thread control one SSD)
     │   │ 
     │   └── CAM_variable_core_benchmark (microbenchmark for CAM,one thread control variable SSDs)
     │       

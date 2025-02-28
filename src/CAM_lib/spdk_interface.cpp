@@ -6,7 +6,7 @@
 #include "spdk_interface.h"
 
 
-#include <QDMAController.hpp>
+#include <GPU_memory_management.hpp>
 #include <iostream>
 #include <tuple>
 #include <vector>

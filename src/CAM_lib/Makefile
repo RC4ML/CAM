@@ -1,4 +1,5 @@
-SPDK_DIR = /home/ff/hyperion/spdk
+SPDK_DIR = ../../spdk
+
 CUDA_DIR = /usr/local/cuda-12.4
 OUTPUT_DIR = ../../build/lib
 
@@ -9,7 +10,7 @@ $(shell mkdir -p $(OUTPUT_DIR))
 
 exe:
 	g++ --std=c++17 -mcmodel=medium spdk_interface.h spdk_interface.cpp  -o $(OUTPUT_DIR)/libspdk_interface.so -shared -lcudart \
-	-L/usr/local/cuda/lib64 -L../../build/lib -lgpu_memory_management -lcudart -lcuda -L$(CUDA_DIR)/lib64 \
+	-L/usr/local/cuda/lib64 -L../../build/lib -lgpu_memory_management -lcudart -lcuda -L$(CUDA_DIR)/lib64 -I../../src/GPU_memory_lib \
 	-g -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -fno-strict-aliasing \
 	-I$(SPDK_DIR)/include -march=native -Wformat -Wformat-security -D_GNU_SOURCE -fPIC -fstack-protector -fno-common \
 	-I$(SPDK_DIR)/isa-l/.. -I$(SPDK_DIR)/isalbuild -I$(SPDK_DIR)/isa-l-crypto/.. -I$(CUDA_DIR)/include \
@@ -24,10 +25,10 @@ exe:
 	$(SPDK_DIR)/dpdk/build/lib/librte_vhost.so -Wl,-as-needed -Wl,-rpath=$(SPDK_DIR)/dpdk/build/lib  -L$(SPDK_DIR)/isa-l/.libs -lisal -L$(SPDK_DIR)/isa-l-crypto/.libs -lisal_crypto -pthread -lrt -luuid -lssl -lcrypto -lm -lfuse3 -lkeyutils -laio
 
 	
-	nvcc -dc   -Xcompiler -fPIC -I /home/szy/application/cam/ -c gpu_transfer.cu -o $(OUTPUT_DIR)/gpu_transfer.o
-	nvcc -dlink  -I /home/szy/application/cam/ -o $(OUTPUT_DIR)/gpu_transfer_link.o $(OUTPUT_DIR)/gpu_transfer.o
-	nvcc -rdc=true sample_read.cu $(OUTPUT_DIR)/gpu_transfer.o -o $(OUTPUT_DIR)/sample_read -I /home/szy/application/cam  -L /home/szy/application/cam -lspdk_interface
-	nvcc -rdc=true sample_write.cu $(OUTPUT_DIR)/gpu_transfer.o -o $(OUTPUT_DIR)/sample_write -I /home/szy/application/cam  -L /home/szy/application/cam -lspdk_interface
+	nvcc -dc   -Xcompiler -fPIC -I../../src/GPU_memory_lib -c gpu_transfer.cu -o $(OUTPUT_DIR)/gpu_transfer.o
+	nvcc -dlink  -I ../../src/CAM_lib -o $(OUTPUT_DIR)/gpu_transfer_link.o $(OUTPUT_DIR)/gpu_transfer.o
+	# nvcc -rdc=true sample_read.cu $(OUTPUT_DIR)/gpu_transfer.o -o $(OUTPUT_DIR)/sample_read   -I../../src/GPU_memory_lib -L $(OUTPUT_DIR) -lspdk_interface
+	# nvcc -rdc=true sample_write.cu $(OUTPUT_DIR)/gpu_transfer.o -o $(OUTPUT_DIR)/sample_write  -I../../src/GPU_memory_lib -L $(OUTPUT_DIR) -lspdk_interface
 
 
 

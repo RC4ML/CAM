@@ -1,6 +1,6 @@
 # Define variables for include, library, and output paths
 INCLUDE_PATH = ../../CAM_lib
-LIB_PATH = ../../../build/src/CAM_lib
+LIB_PATH = ../../../build/lib
 OUTPUT_DIR = ../../../build/benchmarks/CAM_benchmark
 
 # Ensure the output directory exists
@@ -10,7 +10,7 @@ $(shell mkdir -p $(OUTPUT_DIR))
 NVCC = nvcc
 
 # Compiler flags
-NVCC_FLAGS = -I $(INCLUDE_PATH) -L $(LIB_PATH) -lgpussd_baseline
+NVCC_FLAGS = -I $(INCLUDE_PATH) -I../../GPU_memory_lib -L $(LIB_PATH) -lspdk_interface 
 
 
 
@@ -44,4 +44,4 @@ $(OUTPUT_DIR)/$(TARGET4): $(SOURCE4)
 
 # Clean rule
 clean:
-	rm -f $(OUTPUT_DIR)/$(TARGET)
+	rm -f $(OUTPUT_DIR)/$(TARGET1) $(OUTPUT_DIR)/$(TARGET2) $(OUTPUT_DIR)/$(TARGET3) $(OUTPUT_DIR)/$(TARGET4)

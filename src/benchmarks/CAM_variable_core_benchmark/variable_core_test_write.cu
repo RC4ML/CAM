@@ -9,7 +9,7 @@
 #include <cstdint>
 #include<ctime>
 #include "spdk_variable_core.h"
-#include <QDMAController.hpp>
+#include <GPU_memory_management.hpp>
 
 
 const int64_t embed_num = 1000000;

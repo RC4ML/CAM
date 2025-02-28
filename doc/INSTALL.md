@@ -25,7 +25,8 @@ sudo sh -c "echo 32768 > /proc/sys/vm/nr_hugepages"
 
 ~~~bash
 cd spdk
-./configure
+git submodule update --init
+./configure --with-shared
 make
 ~~~
 
