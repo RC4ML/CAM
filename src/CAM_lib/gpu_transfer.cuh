@@ -2,7 +2,7 @@
 #define __GPU_TRANSFER_CUH__
 #include <cuda_runtime.h>
 #include <thread>
-#include "spdk_interface.h"
+#include "CAM_interface.h"
 
 #define MSCCLPP_DEVICE_INLINE __forceinline__ __device__
 #define MSCCLPP_HOST_DEVICE_INLINE __forceinline__ __host__ __device__

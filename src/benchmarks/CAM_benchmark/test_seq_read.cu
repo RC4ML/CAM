@@ -8,7 +8,7 @@
 #include <thread>
 #include <cstdint>
 #include<ctime>
-#include "spdk_interface.h"
+#include "CAM_interface.h"
 #include <GPU_memory_management.hpp>
 
 

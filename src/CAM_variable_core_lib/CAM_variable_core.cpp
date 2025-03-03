@@ -1,12 +1,9 @@
-/*   SPDX-License-Identifier: BSD-3-Clause
- *   Copyright (C) 2016 Intel Corporation.
- *   All rights reserved.
- */
-
-#include "spdk_interface.h"
 
 
-#include <GPU_memory_management.hpp>
+#include "CAM_variable_core.h"
+
+
+#include "GPU_memory_management.hpp"
 #include <iostream>
 #include <tuple>
 #include <vector>
@@ -37,6 +34,7 @@ static GPUMemCtl* gpuMemCtl;
 static const int64_t lba_size = 512;
 static int64_t embed_entry_width ;
 static int64_t embed_entry_lba;
+static int64_t total_core_num ;
 
 static int64_t element_per_buffer[max_dev_num];
 static std::pair<int64_t, int64_t> *thread_buffer[max_dev_num];
@@ -57,9 +55,6 @@ std::vector<std::future<int>> wait_flag_write;
 ThreadPool threadPool_write(max_dev_num);
 static std::pair<int64_t, int64_t> *thread_buffer_write[max_dev_num];  
 static std::vector<int64_t> pending_io_per_dev_write;
-u_int64_t max_read_block_num = 1000000UL;
-
-
 
 static  void
 read_complete(void* arg, const struct spdk_nvme_cpl* completion) {
@@ -188,17 +183,75 @@ static int thread_runner2(int32_t dev_index) {
     return 0;
 }
 
-
+static int thread_runner_variablecore(int32_t thread_index){
+    bool submit_all_end = false;
+    bool all_complete = false;
+    std::vector<int64_t> thread_dev_index;
+    std::vector<struct ns_entry*> ns_entry_array;
+    std::vector<int64_t> local_buffer_index;
+    for(uint64_t i =thread_index;i<g_namespaces.size();i+=total_core_num){
+        thread_dev_index.push_back(i);
+        ns_entry_array.push_back(g_namespaces[i]);
+        local_buffer_index.push_back(0);
+    }
+    
+    u_int32_t dev_num = thread_dev_index.size();
+    //printf("dev_num : %d\n",dev_num);
+    while(!submit_all_end || !all_complete){
+            //if(thread_index ==2)
+              // printf("submit_all_end : %d all_complete : %d\n",submit_all_end,all_complete);
+        if(!submit_all_end){
+            submit_all_end = true;
+            for(int i = 0; i < dev_num; i++){
+                if(local_buffer_index[i] < element_per_buffer[thread_dev_index[i]] && thread_buffer[thread_dev_index[i]][local_buffer_index[i]].first != -1){
+                    
+                    auto lba_addr = thread_buffer[thread_dev_index[i]][local_buffer_index[i]].first;
+                    void* map_addr = (void*)thread_buffer[thread_dev_index[i]][local_buffer_index[i]].second;
+                    ++pending_io_per_dev[thread_dev_index[i]];
+                    auto rc = spdk_nvme_ns_cmd_read(ns_entry_array[i]->ns, ns_entry_array[i]->qpair, map_addr,
+                                                lba_addr, /* LBA start */
+                                                embed_entry_lba, /* number of LBAs */
+                                                read_complete, (void*)ns_entry_array[i], 0);
+                    if(rc != 0) {
+                        fprintf(stderr, "Starting read I/O failed at dev %d index %ld\n", thread_dev_index[i], local_buffer_index[i]);
+                        fprintf(stderr, "lbaddr : %ld\n",lba_addr);
+                        fprintf(stderr, "map_addr : %p\n",map_addr);
+                        fprintf(stderr, "embed_entry_lba : %ld\n",embed_entry_lba);
+                        fprintf(stderr, "embed_entry_width : %ld\n",embed_entry_width);
+                        exit(1);
+                    }
+                    ++local_buffer_index[i];
+                }
+            }
+            for(int i = 0; i < dev_num; i++){
+                if(thread_buffer[thread_dev_index[i]][local_buffer_index[i]].first != -1){
+                    submit_all_end = false;
+                    break;
+                }
+            }
+        }
+        all_complete = true;
+        for(int i = 0; i < dev_num; i++){
+            if(pending_io_per_dev[thread_dev_index[i]] > 0){
+                all_complete = false;
+                spdk_nvme_qpair_process_completions(ns_entry_array[i]->qpair, 0);
+            }
+        }
+    }
+    return 0;
+}
 
 // void task_submit(int64_t embed_num, int32_t *embed_id, void *dev_addr) {
 void task_submit(int64_t embed_num, u_int64_t embed_id,uintptr_t *dev_addr) {
     //printf("entering task submit!\n");
     
-    for(int32_t i=0; i<(int32_t)g_namespaces.size(); ++i) {
-        element_per_buffer[i] = 0;
+    for(int32_t i=0; i<(int32_t)total_core_num; ++i) {
+        
         wait_flag.emplace_back(threadPool.enqueue(thread_runner2, i));
     }
-
+    for(int32_t i=0; i< g_namespaces.size(); ++i) {
+        element_per_buffer[i] = 0;
+    }
     int32_t * p_embed_id = (int32_t *)embed_id;
     for(int64_t i = 0; i < embed_num; i++) {
         //printf("**********************\n");
@@ -223,9 +276,7 @@ void task_submit(int64_t embed_num, u_int64_t embed_id,uintptr_t *dev_addr) {
         ++element_per_buffer[i];
     }
 
-    for(int32_t i=0; i<(int32_t)g_namespaces.size(); ++i) {
-        wait_flag[i].get();
-    }
+    
 }
 
 static void alloc_qpair() {
@@ -423,7 +474,11 @@ void spdkmap(void * map_ptr,size_t  pool_size,uint64_t  phy_addr)
 
 void clear_wait_flag()
 {
-    for(int32_t i=0; i<(int32_t)g_namespaces.size(); ++i) {
+    // for(int32_t i=0; i<(int32_t)g_namespaces.size(); ++i) {
+    //     wait_flag[i].get();
+    // }
+    for(uint32_t i = 0; i < total_core_num; i++){
+        //printf("wait flag : %d\n",i);
         wait_flag[i].get();
     }
     wait_flag.clear();
@@ -497,6 +552,66 @@ static int thread_runner3(int32_t dev_index) {
 }
 
 
+static int thread_runner_variablecore_write(int32_t thread_index){
+    bool submit_all_end = false;
+    bool all_complete = false;
+    std::vector<int64_t> thread_dev_index;
+    std::vector<struct ns_entry*> ns_entry_array;
+    std::vector<int64_t> local_buffer_index;
+    for(uint64_t i =thread_index;i<g_namespaces.size();i+=total_core_num){
+        thread_dev_index.push_back(i);
+        ns_entry_array.push_back(g_namespaces[i]);
+        local_buffer_index.push_back(0);
+    }
+    
+    u_int32_t dev_num = thread_dev_index.size();
+    //printf("dev_num : %d\n",dev_num);
+    while(!submit_all_end || !all_complete){
+            //if(thread_index ==2)
+              // printf("submit_all_end : %d all_complete : %d\n",submit_all_end,all_complete);
+        if(!submit_all_end){
+            submit_all_end = true;
+            for(int i = 0; i < dev_num; i++){
+                if(local_buffer_index[i] < element_per_buffer_write[thread_dev_index[i]] && thread_buffer_write[thread_dev_index[i]][local_buffer_index[i]].first != -1){
+                    
+                    auto lba_addr = thread_buffer_write[thread_dev_index[i]][local_buffer_index[i]].first;
+                    void* map_addr = (void*)thread_buffer_write[thread_dev_index[i]][local_buffer_index[i]].second;
+                    ++pending_io_per_dev_write[thread_dev_index[i]];
+                    auto rc = spdk_nvme_ns_cmd_write(ns_entry_array[i]->ns, ns_entry_array[i]->qpair, map_addr,
+                                                lba_addr, /* LBA start */
+                                                embed_entry_lba, /* number of LBAs */
+                                                write_complete, (void*)ns_entry_array[i], 0);
+                    if(rc != 0) {
+                        fprintf(stderr, "Starting write I/O failed at dev %d index %ld\n", thread_dev_index[i], local_buffer_index[i]);
+                        fprintf(stderr, "lbaddr : %ld\n",lba_addr);
+                        fprintf(stderr, "map_addr : %p\n",map_addr);
+                        fprintf(stderr, "embed_entry_lba : %ld\n",embed_entry_lba);
+                        fprintf(stderr, "embed_entry_width : %ld\n",embed_entry_width);
+                        exit(1);
+                    }
+                    ++local_buffer_index[i];
+                }
+            }
+            for(int i = 0; i < dev_num; i++){
+                if(thread_buffer_write[thread_dev_index[i]][local_buffer_index[i]].first != -1){
+                    submit_all_end = false;
+                    break;
+                }
+            }
+        }
+        all_complete = true;
+        for(int i = 0; i < dev_num; i++){
+            if(pending_io_per_dev_write[thread_dev_index[i]] > 0){
+                all_complete = false;
+                spdk_nvme_qpair_process_completions(ns_entry_array[i]->qpair, 0);
+            }
+        }
+    }
+    
+        return 0;
+}
+
+
 // void task_submit(int64_t embed_num, int32_t *embed_id, void *dev_addr) {
 void task_submit_write(int64_t embed_num, u_int64_t embed_id,uintptr_t *dev_addr) {
     //printf("entering task submit!\n");
@@ -537,7 +652,7 @@ void task_submit_write(int64_t embed_num, u_int64_t embed_id,uintptr_t *dev_addr
 
 void clear_wait_flag_write()
 {
-    for(int32_t i=0; i<(int32_t)g_namespaces.size(); ++i) {
+    for(int32_t i=0; i<total_core_num; ++i) {
         wait_flag_write[i].get();
     }
     wait_flag_write.clear();
@@ -545,9 +660,10 @@ void clear_wait_flag_write()
 
 
 
-void cam_init(u_int32_t emb_width)
+void cam_init(u_int32_t emb_width, u_int32_t core_num)
 {
     int rc;
+    total_core_num = core_num;
     rc = rc4ml_spdk_init(emb_width);
     if (rc != 0) {
         fprintf(stderr, "rc4ml_spdk_init() failed\n");
@@ -657,10 +773,15 @@ void seq_write_submit(u_int64_t start_lba, u_int64_t num_blocks,uintptr_t dev_ad
 // void task_submit(int64_t embed_num, int32_t *embed_id, void *dev_addr) {
 void cam_gemm_read(u_int64_t * lba_array, u_int64_t req_num,uintptr_t dev_addr) {
     //printf("entering task submit!\n");
+    //printf("total_core_num : %d\n",total_core_num);
+    for(int32_t i=0; i<(int32_t)total_core_num; ++i) {
+        
+        wait_flag.emplace_back(threadPool.enqueue(thread_runner_variablecore, i));
+    }
+
     
     for(int32_t i=0; i<(int32_t)g_namespaces.size(); ++i) {
         element_per_buffer[i] = 0;
-        wait_flag.emplace_back(threadPool.enqueue(thread_runner2, i));
     }
 
 
@@ -693,10 +814,12 @@ void cam_gemm_read(u_int64_t * lba_array, u_int64_t req_num,uintptr_t dev_addr) 
 // void task_submit(int64_t embed_num, int32_t *embed_id, void *dev_addr) {
 void cam_gemm_write(u_int64_t * lba_array, u_int64_t req_num,uintptr_t dev_addr) {
     //printf("entering task submit!\n");
-    
+    for(int32_t i=0; i<(int32_t)total_core_num; ++i) {
+        
+        wait_flag_write.emplace_back(threadPool_write.enqueue(thread_runner_variablecore_write, i));
+    }
     for(int32_t i=0; i<(int32_t)g_namespaces.size(); ++i) {
         element_per_buffer_write[i] = 0;
-        wait_flag_write.emplace_back(threadPool_write.enqueue(thread_runner3, i));
     }
 
     for(int64_t i = 0; i < req_num; i++) {
@@ -724,7 +847,3 @@ void cam_gemm_write(u_int64_t * lba_array, u_int64_t req_num,uintptr_t dev_addr)
 
     
 }
-
-
-
-

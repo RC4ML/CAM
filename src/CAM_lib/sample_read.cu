@@ -9,7 +9,7 @@
 #include <cstdint>
 #include<ctime>
 #include "gpu_transfer.cuh"
-#include "spdk_interface.h"
+#include "CAM_interface.h"
 
 __inline__ uint64_t get_tscp(void)
 {

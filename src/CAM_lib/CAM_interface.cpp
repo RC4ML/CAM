@@ -3,10 +3,10 @@
  *   All rights reserved.
  */
 
-#include "gpussd_baseline.h"
-#include "gpu_transfer.cuh"
+#include "CAM_interface.h"
 
-#include <QDMAController.hpp>
+
+#include <GPU_memory_management.hpp>
 #include <iostream>
 #include <tuple>
 #include <vector>
@@ -27,7 +27,6 @@ static const int32_t max_dev_num = 12;
 
 static std::vector<ctrlr_entry*> g_controllers;
 static std::vector<ns_entry*> g_namespaces;
-static std::vector<std::string> g_peci_addr; 
 static struct spdk_nvme_transport_id g_trid = {};
 
 static int64_t total_pending = 0;
@@ -58,48 +57,9 @@ std::vector<std::future<int>> wait_flag_write;
 ThreadPool threadPool_write(max_dev_num);
 static std::pair<int64_t, int64_t> *thread_buffer_write[max_dev_num];  
 static std::vector<int64_t> pending_io_per_dev_write;
+u_int64_t max_read_block_num = 1000000UL;
 
-static void sort_g_namespaces(void)
-{
-    static std::vector<std::string> addr_copy1(g_peci_addr);
-    bool swapped;
-    do {
-        swapped = false;
-        for (size_t i = 0; i < g_namespaces.size() - 1; ++i) {
-            if (addr_copy1[i] > addr_copy1[i + 1]) {
-                // Swap elements in g_peci_addr
-                std::swap(addr_copy1[i], addr_copy1[i + 1]);
 
-                // Swap corresponding elements in g_namespaces
-                std::swap(g_namespaces[i], g_namespaces[i + 1]);
-
-                swapped = true;
-            }
-        }
-        n--;  // Reduce the array size since the last element is now sorted
-    } while (swapped);
-}
-
-static void sort_g_controllers(void)
-{
-    static std::vector<std::string> addr_copy1(g_peci_addr);
-    bool swapped;
-    do {
-        swapped = false;
-        for (size_t i = 0; i < g_controllers.size()-1; ++i) {
-            if (addr_copy1[i] > addr_copy1[i + 1]) {
-                // Swap elements in g_peci_addr
-                std::swap(addr_copy1[i], addr_copy1[i + 1]);
-
-                // Swap corresponding elements in g_namespaces
-                std::swap(g_controllers[i], g_controllers[i + 1]);
-
-                swapped = true;
-            }
-        }
-        n--;  // Reduce the array size since the last element is now sorted
-    } while (swapped);
-}
 
 static  void
 read_complete(void* arg, const struct spdk_nvme_cpl* completion) {
@@ -121,8 +81,8 @@ read_complete(void* arg, const struct spdk_nvme_cpl* completion) {
 }
 
 int rc4ml_gdr_init() {
-    std::cout<<"13:25"<<std::endl;
-    gpuMemCtl = GPUMemCtl::getInstance(1, pool_size);
+    std::cout<<"13:26"<<std::endl;
+    gpuMemCtl = GPUMemCtl::getInstance(0, pool_size);
 
     if (gpuMemCtl->chechPhyContiguous() == false) {
         printf("GPU memory PhyAddr is not contiguous\n");
@@ -208,9 +168,13 @@ static int thread_runner2(int32_t dev_index) {
                 auto rc = spdk_nvme_ns_cmd_read(ns_entry->ns, ns_entry->qpair, map_addr,
                                                 lba_addr, /* LBA start */
                                                 embed_entry_lba, /* number of LBAs */
-                                                read_complete, (void*)ns_entry, 0);
+                                                 read_complete, (void*)ns_entry, 0);
                 if(rc != 0) {
                     fprintf(stderr, "Starting read I/O failed at dev %d index %ld\n", dev_index, local_buffer_index);
+                    fprintf(stderr, "lbaddr : %ld\n",lba_addr);
+                    fprintf(stderr, "map_addr : %p\n",map_addr);
+                    fprintf(stderr, "embed_entry_lba : %ld\n",embed_entry_lba);
+                    fprintf(stderr, "embed_entry_width : %ld\n",embed_entry_width);
                     exit(1);
                 }
 
@@ -306,7 +270,7 @@ void release_qpair() {
 static bool
 probe_cb(void* cb_ctx, const struct spdk_nvme_transport_id* trid, struct spdk_nvme_ctrlr_opts* opts) {
     printf("Attaching to %s\n", trid->traddr);
-    g_peci_addr.push_back(trid->traddr);
+
     return true;
 }
 
@@ -325,7 +289,7 @@ attach_cb(void* cb_ctx, const struct spdk_nvme_transport_id* trid, struct spdk_n
     }
 
     printf("Attached to %s\n", trid->traddr);
-    
+
     /*
      * spdk_nvme_ctrlr is the logical abstraction in SPDK for an NVMe
      *  controller.  During initialization, the IDENTIFY data for the
@@ -459,6 +423,9 @@ void spdkmap(void * map_ptr,size_t  pool_size,uint64_t  phy_addr)
 
 void clear_wait_flag()
 {
+    for(int32_t i=0; i<(int32_t)g_namespaces.size(); ++i) {
+        wait_flag[i].get();
+    }
     wait_flag.clear();
 }
 
@@ -510,7 +477,12 @@ static int thread_runner3(int32_t dev_index) {
                                                 embed_entry_lba, /* number of LBAs */
                                                 write_complete, (void*)ns_entry, 0);
                 if(rc != 0) {
-                    fprintf(stderr, "Starting read I/O failed at dev %d index %ld\n", dev_index, local_buffer_index);
+                   
+                    fprintf(stderr, "Starting write I/O failed at dev %d index %ld\n", dev_index, local_buffer_index);
+                    fprintf(stderr, "lbaddr : %ld\n",lba_addr);
+                    fprintf(stderr, "map_addr : %p\n",map_addr);
+                    fprintf(stderr, "embed_entry_lba : %ld\n",embed_entry_lba);
+                    fprintf(stderr, "embed_entry_width : %ld\n",embed_entry_width);
                     exit(1);
                 }
 
@@ -565,113 +537,13 @@ void task_submit_write(int64_t embed_num, u_int64_t embed_id,uintptr_t *dev_addr
 
 void clear_wait_flag_write()
 {
+    for(int32_t i=0; i<(int32_t)g_namespaces.size(); ++i) {
+        wait_flag_write[i].get();
+    }
     wait_flag_write.clear();
 }
 
-// static void run_task() {
-//     launch_idle_kernel();
 
-//     for (int64_t i = 0; i < embed_num; i++) {
-//         embed_id[i] = i;
-//         dev_addr[i] = (uintptr_t)gpuMemCtl->getDevPtr() + i * embed_entry_width;
-//     }
-
-//     std::random_shuffle(embed_id, embed_id + embed_num);
-//     std::random_shuffle(dev_addr, dev_addr + embed_num);
-
-//     // g_namespaces.resize(1);
-
-//     printf("Start to submit task\n");
-
-//     auto time_start = std::chrono::high_resolution_clock::now();
-
-//     task_submit_write(embed_num, (u_int64_t)embed_id, dev_addr);
-//     clear_wait_flag_write();
-//     task_submit(embed_num, (u_int64_t)embed_id, dev_addr);
-//     clear_wait_flag();
-//     auto time_end = std::chrono::high_resolution_clock::now();
-
-//     std::chrono::duration<double> time_span = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
-//     printf("Time: %f\n", time_span.count());
-//     printf("bandwdth : %lf GB/s\n",embed_num*4/time_span.count()/1024/1024);
-// }
-
-// static void run_task_function_test() {
-//     launch_idle_kernel();
-
-//     for (int64_t i = 0; i < embed_num; i++) {
-//         embed_id[i] = i;
-//         dev_addr[i] = (uintptr_t)gpuMemCtl->getDevPtr() + i * embed_entry_width;
-//     }
-//     int buffer[1024];
-//     int buffer_fake[1024];
-//     int buffer2[1024];
-//     for(int i=0;i<1024;i++){
-//         buffer[i]=i;
-//         buffer_fake[i] =0;
-//     }
-
-//     std::random_shuffle(embed_id, embed_id + embed_num);
-//     std::random_shuffle(dev_addr, dev_addr + embed_num);
-
-//     cudaMemcpy(dev_addr[2], buffer, 1024 * sizeof(int), cudaMemcpyHostToDevice);
-//     task_submit_write(embed_num, (u_int64_t)embed_id, dev_addr);
-//     clear_wait_flag_write();
-//     cudaMemcpy(dev_addr[2], buffer_fake, 1024 * sizeof(int), cudaMemcpyHostToDevice);
-//     task_submit(embed_num, (u_int64_t)embed_id, dev_addr);
-//     clear_wait_flag();
-//     cudaMemcpy(buffer2, dev_addr[2], 1024 * sizeof(int) , cudaMemcpyDeviceToHost);
-
-//     for(int i=0;i<1024;i++){
-//         if(buffer[i]!= buffer2[i]){
-//             std::cout<< "un equal ! buffer ["<<i<<"] = "<<buffer[i]<<" buffer2 ["<<i<<"] = "<<buffer2[i]<<std::endl;
-//             break;
-//         }
-//     }
-
-//     // g_namespaces.resize(1);
-
-//     printf("Start to submit task\n");
-
-//     auto time_start = std::chrono::high_resolution_clock::now();
-
-    
-    
-//     auto time_end = std::chrono::high_resolution_clock::now();
-
-//     std::chrono::duration<double> time_span = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
-//     printf("Time: %f\n", time_span.count());
-//     printf("bandwdth : %lf GB/s\n",embed_num*4/time_span.count()/1024/1024);
-// }
-
-// int main(int argc, char** argv) {
-    
-//     int rc;
-    
-//     rc = rc4ml_spdk_init(4096);
-//     if (rc != 0) {
-//         fprintf(stderr, "rc4ml_spdk_init() failed\n");
-//         rc = 1;
-//         goto exit;
-//     }
-
-//     rc = rc4ml_gdr_init();
-//     if (rc != 0) {
-//         fprintf(stderr, "rc4ml_gdr_init() failed\n");
-//         rc = 1;
-//         goto exit;
-//     }
-
-//     run_task();
-    
-
-// exit:
-//     GPUMemCtl::cleanCtx();
-//     fflush(stdout);
-//     rc4ml_spdk_cleanup();
-
-//     return rc;
-// }
 
 void cam_init(u_int32_t emb_width)
 {
@@ -686,21 +558,6 @@ void cam_init(u_int32_t emb_width)
         fprintf(stderr, "rc4ml_gdr_init() failed\n");
         rc = 1;
     }
-
-    // gpuMemCtl = GPUMemCtl::getInstance(0,30UL *1024 * 1024 * 1024);
-    // if (gpuMemCtl->chechPhyContiguous() == false) {
-    //     printf("GPU memory PhyAddr is not contiguous\n");
-    // }else{
-    //     printf("***************chechPhyContiguous success *******\n");
-    // }
-
-    // void* dev_ptr = gpuMemCtl->getDevPtr();
-    // void* map_ptr = gpuMemCtl->getMapDevPtr();
-    // auto phy_addr = gpuMemCtl->mapV2P(dev_ptr);
-    // printf("dev_ptr: %p\n",dev_ptr);
-    // printf("map_ptr: %p\n",map_ptr);
-    // printf("phy_addr: %p\n",phy_addr);
-    //spdkmap(map_ptr, 30UL * 1024 * 1024 * 1024, phy_addr);
     std::cout<<"initialization done."<<std::endl;
 }
 
@@ -736,6 +593,7 @@ void seq_read_submit(u_int64_t start_lba, u_int64_t num_blocks,uintptr_t dev_add
         //printf("p_embed_id[i] : %d\n",p_embed_id[i]);
         int64_t dev_id = (start_lba+i) % g_namespaces.size();
         int64_t lba_addr = (start_lba+i)/ g_namespaces.size()*8 ;//512*8 = 4096 
+
         //printf("dev_id : %d\n",dev_id);
         //printf("快吗 : %d \n",lba_addr);
         //printf("i=%d\n",i);
@@ -755,9 +613,7 @@ void seq_read_submit(u_int64_t start_lba, u_int64_t num_blocks,uintptr_t dev_add
         ++element_per_buffer[i];
     }
 
-    for(int32_t i=0; i<(int32_t)g_namespaces.size(); ++i) {
-        wait_flag[i].get();
-    }
+
 }
 
 void seq_write_submit(u_int64_t start_lba, u_int64_t num_blocks,uintptr_t dev_addr) {
@@ -794,9 +650,7 @@ void seq_write_submit(u_int64_t start_lba, u_int64_t num_blocks,uintptr_t dev_ad
         ++element_per_buffer_write[i];
     }
 
-    for(int32_t i=0; i<(int32_t)g_namespaces.size(); ++i) {
-        wait_flag_write[i].get();
-    }
+
 }
 
 
@@ -833,9 +687,7 @@ void cam_gemm_read(u_int64_t * lba_array, u_int64_t req_num,uintptr_t dev_addr) 
         ++element_per_buffer[i];
     }
 
-    for(int32_t i=0; i<(int32_t)g_namespaces.size(); ++i) {
-        wait_flag[i].get();
-    }
+    
 }
 
 // void task_submit(int64_t embed_num, int32_t *embed_id, void *dev_addr) {
@@ -870,7 +722,9 @@ void cam_gemm_write(u_int64_t * lba_array, u_int64_t req_num,uintptr_t dev_addr)
         ++element_per_buffer_write[i];
     }
 
-    for(int32_t i=0; i<(int32_t)g_namespaces.size(); ++i) {
-        wait_flag_write[i].get();
-    }
+    
 }
+
+
+
+

@@ -9,7 +9,7 @@ $(shell mkdir -p $(OUTPUT_DIR))
 .PHONY:all
 
 exe:
-	g++ --std=c++17 -mcmodel=medium spdk_interface.h spdk_interface.cpp  -o $(OUTPUT_DIR)/libspdk_interface.so -shared -lcudart \
+	g++ --std=c++17 -mcmodel=medium CAM_interface.h CAM_interface.cpp  -o $(OUTPUT_DIR)/libCAM_interface.so -shared -lcudart \
 	-L/usr/local/cuda/lib64 -L../../build/lib -lgpu_memory_management -lcudart -lcuda -L$(CUDA_DIR)/lib64 -I../../src/GPU_memory_lib \
 	-g -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -fno-strict-aliasing \
 	-I$(SPDK_DIR)/include -march=native -Wformat -Wformat-security -D_GNU_SOURCE -fPIC -fstack-protector -fno-common \
@@ -27,8 +27,8 @@ exe:
 	
 	nvcc -dc   -Xcompiler -fPIC -I../../src/GPU_memory_lib -c gpu_transfer.cu -o $(OUTPUT_DIR)/gpu_transfer.o
 	nvcc -dlink  -I ../../src/CAM_lib -o $(OUTPUT_DIR)/gpu_transfer_link.o $(OUTPUT_DIR)/gpu_transfer.o
-	# nvcc -rdc=true sample_read.cu $(OUTPUT_DIR)/gpu_transfer.o -o $(OUTPUT_DIR)/sample_read   -I../../src/GPU_memory_lib -L $(OUTPUT_DIR) -lspdk_interface
-	# nvcc -rdc=true sample_write.cu $(OUTPUT_DIR)/gpu_transfer.o -o $(OUTPUT_DIR)/sample_write  -I../../src/GPU_memory_lib -L $(OUTPUT_DIR) -lspdk_interface
+	nvcc -rdc=true sample_read.cu $(OUTPUT_DIR)/gpu_transfer.o -o $(OUTPUT_DIR)/sample_read   -I../../src/GPU_memory_lib -L $(OUTPUT_DIR) -lCAM_interface
+	nvcc -rdc=true sample_write.cu $(OUTPUT_DIR)/gpu_transfer.o -o $(OUTPUT_DIR)/sample_write  -I../../src/GPU_memory_lib -L $(OUTPUT_DIR) -lCAM_interface
 
 
 

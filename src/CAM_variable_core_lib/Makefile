@@ -10,7 +10,7 @@ $(shell mkdir -p $(OUTPUT_DIR))
 exe:
 	
 
-	g++ --std=c++17 -mcmodel=medium spdk_variable_core.h spdk_variable_core.cpp  -o $(OUTPUT_DIR)/libCAM_variable_core.so -shared -lcudart \
+	g++ --std=c++17 -mcmodel=medium CAM_variable_core.h CAM_variable_core.cpp  -o $(OUTPUT_DIR)/libCAM_variable_core.so -shared -lcudart \
 	-L/usr/local/cuda/lib64 -L../../build/lib -lgpu_memory_management -I../GPU_memory_lib \
 	-g -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -fno-strict-aliasing \
 	-I$(SPDK_DIR)/include -march=native -Wformat -Wformat-security -D_GNU_SOURCE -fPIC -fstack-protector -fno-common \

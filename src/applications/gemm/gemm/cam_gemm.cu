@@ -7,7 +7,7 @@
 #include <algorithm>
 #include "gemm.cuh"
 #include <vector>
-#include "gpussd_baseline.h"
+#include "CAM_interface.h"
 
 typedef float fp_t;
 int main(int argc, char *argv[])
